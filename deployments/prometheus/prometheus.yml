@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'chronosdb'
+    static_configs:
+      - targets: ['localhost:8080']
+    metrics_path: '/v1/db/test/metrics'
+    scrape_interval: 5s
+
+  - job_name: 'chronosdb-kafka'
+    static_configs:
+      - targets: ['localhost:9092']
+    metrics_path: '/metrics'

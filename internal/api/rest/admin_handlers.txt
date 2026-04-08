@@ -1,0 +1,41 @@
+// handleCreateTenant - POST /v1/admin/tenants
+func (s *Server) handleCreateTenant(w http.ResponseWriter, r *http.Request) {
+    var req struct {
+        Name string `json:"name"`
+    }
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        respondError(w, err.Error(), http.StatusBadRequest)
+        return
+    }
+    
+    tenant, err := s.tenantManager.CreateTenant(req.Name)
+    if err != nil {
+        respondError(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+    
+    respondJSON(w, tenant, http.StatusCreated)
+}
+
+// handleCreateUser - POST /v1/admin/tenants/{tenantId}/users
+func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
+    vars := mux.Vars(r)
+    tenantID := vars["tenantId"]
+    
+    var req struct {
+        Username string `json:"username"`
+        Role     string `json:"role"`
+    }
+    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+        respondError(w, err.Error(), http.StatusBadRequest)
+        return
+    }
+    
+    user, err := s.tenantManager.CreateUser(tenantID, req.Username, multitenancy.Role(req.Role))
+    if err != nil {
+        respondError(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+    
+    respondJSON(w, user, http.StatusCreated)
+}

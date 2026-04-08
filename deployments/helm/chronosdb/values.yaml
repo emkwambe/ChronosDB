@@ -1,0 +1,53 @@
+# Default values for chronosdb
+replicaCount: 1
+
+image:
+  repository: chronosdb/chronosdb
+  tag: latest
+  pullPolicy: IfNotPresent
+
+nameOverride: ""
+fullnameOverride: ""
+
+service:
+  type: ClusterIP
+  restPort: 8080
+  grpcPort: 50051
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: chronosdb.local
+      paths:
+        - path: /
+          pathType: Prefix
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+persistence:
+  enabled: true
+  size: 10Gi
+  storageClass: ""
+  accessMode: ReadWriteOnce
+
+config:
+  apiKey: ""  # Set via secret in production
+  dataDir: /data
+
+kafka:
+  enabled: false
+  brokers: "kafka:9092"
+  topic: "chronosdb-stream"
+  groupId: "chronosdb-group"
+
+nodeSelector: {}
+tolerations: []
+affinity: {}

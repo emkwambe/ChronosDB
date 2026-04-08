@@ -1,0 +1,12 @@
+apiVersion: v2
+name: chronosdb
+description: ChronosDB - Predictive Temporal Graph Database
+type: application
+version: 0.1.0
+appVersion: "3.0.0"
+home: https://github.com/emkwambe/chronosdb
+sources:
+  - https://github.com/emkwambe/chronosdb
+maintainers:
+  - name: ChronosDB Team
+    email: team@chronosdb.io

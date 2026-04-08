@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  chronosdb:
+    build:
+      context: ../..
+      dockerfile: deployments/docker/Dockerfile
+    ports:
+      - "8080:8080"
+      - "50051:50051"
+    volumes:
+      - chronosdb-data:/root/data
+
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./deployments/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./deployments/grafana/dashboard.json:/etc/grafana/provisioning/dashboards/chronosdb.json
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
+volumes:
+  chronosdb-data:
+  prometheus-data:
+  grafana-data:

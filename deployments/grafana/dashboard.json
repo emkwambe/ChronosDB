@@ -1,0 +1,43 @@
+{
+  "dashboard": {
+    "title": "ChronosDB Monitoring",
+    "panels": [
+      {
+        "title": "Queries Per Second",
+        "targets": [
+          {
+            "expr": "rate(chronosdb_queries_total[1m])",
+            "legendFormat": "{{type}}"
+          }
+        ]
+      },
+      {
+        "title": "Query Duration",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(chronosdb_query_duration_seconds_bucket[5m]))",
+            "legendFormat": "p95 - {{type}}"
+          }
+        ]
+      },
+      {
+        "title": "Active Nodes",
+        "targets": [
+          {
+            "expr": "chronosdb_nodes_total",
+            "legendFormat": "nodes"
+          }
+        ]
+      },
+      {
+        "title": "Cache Hit Ratio",
+        "targets": [
+          {
+            "expr": "chronosdb_cache_hits_total / (chronosdb_cache_hits_total + chronosdb_cache_misses_total)",
+            "legendFormat": "hit_ratio"
+          }
+        ]
+      }
+    ]
+  }
+}

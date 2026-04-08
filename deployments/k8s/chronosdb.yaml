@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chronosdb
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chronosdb
+  template:
+    metadata:
+      labels:
+        app: chronosdb
+    spec:
+      containers:
+      - name: chronosdb
+        image: chronosdb/chronosdb:latest
+        ports:
+        - containerPort: 8080
+          name: rest
+        - containerPort: 50051
+          name: grpc
+        env:
+        - name: API_KEY
+          value: ""
+        args:
+        - "-rest-port=8080"
+        - "-grpc-port=50051"
+        - "-data-dir=/data"
+        livenessProbe:
+          httpGet:
+            path: /v1/db/test/health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /v1/db/test/health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        volumeMounts:
+        - name: data
+          mountPath: /data
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: chronosdb-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chronosdb
+  namespace: default
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: rest
+  - port: 50051
+    targetPort: 50051
+    name: grpc
+  selector:
+    app: chronosdb
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: chronosdb-pvc
+  namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi

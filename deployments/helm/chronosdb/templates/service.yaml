@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "chronosdb.fullname" . }}
+  labels:
+    {{- include "chronosdb.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.restPort }}
+      targetPort: rest
+      protocol: TCP
+      name: rest
+    - port: {{ .Values.service.grpcPort }}
+      targetPort: grpc
+      protocol: TCP
+      name: grpc
+  selector:
+    {{- include "chronosdb.selectorLabels" . | nindent 4 }}

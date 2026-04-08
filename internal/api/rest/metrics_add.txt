@@ -1,0 +1,7 @@
+// Add to routes() function in server.go:
+// api.HandleFunc("/metrics", s.handleMetrics).Methods("GET")
+
+// Add handler function:
+func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
+    metrics.MetricsHandler().ServeHTTP(w, r)
+}

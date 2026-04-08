@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "chronosdb.fullname" . }}
+  labels:
+    {{- include "chronosdb.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "chronosdb.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "chronosdb.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: rest
+              containerPort: {{ .Values.service.restPort }}
+              protocol: TCP
+            - name: grpc
+              containerPort: {{ .Values.service.grpcPort }}
+              protocol: TCP
+          env:
+            - name: API_KEY
+              value: {{ .Values.config.apiKey | quote }}
+          args:
+            - "-rest-port={{ .Values.service.restPort }}"
+            - "-grpc-port={{ .Values.service.grpcPort }}"
+            - "-data-dir={{ .Values.config.dataDir }}"
+            {{- if .Values.kafka.enabled }}
+            - "-kafka-brokers={{ .Values.kafka.brokers }}"
+            - "-kafka-topic={{ .Values.kafka.topic }}"
+            - "-kafka-group={{ .Values.kafka.groupId }}"
+            {{- end }}
+          volumeMounts:
+            - name: data
+              mountPath: {{ .Values.config.dataDir }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /v1/db/test/health
+              port: rest
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /v1/db/test/health
+              port: rest
+            initialDelaySeconds: 5
+            periodSeconds: 5
+      volumes:
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "chronosdb.fullname" . }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
