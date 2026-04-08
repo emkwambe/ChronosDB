@@ -28,7 +28,7 @@ switch ($TestType) {
         
         # Generate synthetic data
         Write-Host "Generating synthetic data..." -ForegroundColor Yellow
-        go run test/e2e/data_generator.go
+        go run test/synthetic/data_generator.go
         
         # Run E2E tests
         Write-Host "Running E2E tests..." -ForegroundColor Yellow
@@ -36,7 +36,7 @@ switch ($TestType) {
         
         # Run load tests
         Write-Host "Running load tests..." -ForegroundColor Yellow
-        go run test/e2e/load_test.go
+        go run test/load/load_test.go
     }
     "e2e" {
         Write-Host "Running E2E tests only..." -ForegroundColor Yellow
@@ -44,11 +44,11 @@ switch ($TestType) {
     }
     "load" {
         Write-Host "Running load tests only..." -ForegroundColor Yellow
-        go run test/e2e/load_test.go
+        go run test/load/load_test.go
     }
     "synthetic" {
         Write-Host "Generating synthetic data only..." -ForegroundColor Yellow
-        go run test/e2e/data_generator.go
+        go run test/synthetic/data_generator.go
     }
     default {
         Write-Host "Unknown test type. Options: all, e2e, load, synthetic" -ForegroundColor Red
