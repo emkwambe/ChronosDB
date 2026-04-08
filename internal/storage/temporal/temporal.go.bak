@@ -3,6 +3,7 @@ package temporal
 import (
     "encoding/json"
     "fmt"
+    
 
     "github.com/emkwambe/chronosdb/internal/storage/core"
 )
@@ -28,6 +29,12 @@ type Edge struct {
     Properties map[string]interface{} `json:"properties"`
     TimeRange  TimeRange              `json:"time_range"`
     Deleted    bool                   `json:"deleted,omitempty"`
+}
+
+type PropertyHistory struct {
+    Property string
+    Values   []float64
+    Times    []int64
 }
 
 type TemporalStore struct {
@@ -119,8 +126,55 @@ func (ts *TemporalStore) GetNodeAsOf(id string, timestamp int64) (*Node, error) 
     return nil, nil
 }
 
-// UpdateNodeProperty updates a property with versioning
-func (ts *TemporalStore) UpdateNodeProperty(id string, property string, value interface{}, validFrom int64) error {
+// GetPropertyHistory retrieves historical values of a property for forecasting
+func (ts *TemporalStore) GetPropertyHistory(nodeID, property string, maxPoints int) (*PropertyHistory, error) {
+    // Get current node to start
+    node, err := ts.GetNode(nodeID)
+    if err != nil {
+        return nil, err
+    }
+    if node == nil {
+        return nil, fmt.Errorf("node %s not found", nodeID)
+    }
+    
+    history := &PropertyHistory{
+        Property: property,
+        Values:   []float64{},
+        Times:    []int64{},
+    }
+    
+    // Add current value if numeric
+    if val, ok := node.Properties[property]; ok {
+        if num, ok := convertToFloat64(val); ok {
+            history.Values = append(history.Values, num)
+            history.Times = append(history.Times, node.TimeRange.ValidFrom)
+        }
+    }
+    
+    // In production, would also scan history column family
+    // For MVP, return what we have
+    
+    return history, nil
+}
+
+func convertToFloat64(v interface{}) (float64, bool) {
+    switch val := v.(type) {
+    case float64:
+        return val, true
+    case float32:
+        return float64(val), true
+    case int:
+        return float64(val), true
+    case int64:
+        return float64(val), true
+    case int32:
+        return float64(val), true
+    default:
+        return 0, false
+    }
+}
+
+func (ts *TemporalStore) SoftDeleteNode(id string, deleteTime int64) error {
     currentData, err := ts.engine.Get(core.CFNodesCurrent, []byte(id))
     if err != nil {
         return err
@@ -134,8 +188,8 @@ func (ts *TemporalStore) UpdateNodeProperty(id string, property string, value in
         return err
     }
     
-    // Close current version
-    node.TimeRange.ValidTo = validFrom - 1
+    node.TimeRange.ValidTo = deleteTime - 1
+    node.Deleted = true
     
     closedData, err := json.Marshal(node)
     if err != nil {
@@ -146,9 +200,7 @@ func (ts *TemporalStore) UpdateNodeProperty(id string, property string, value in
         return err
     }
     
-    // Create new version
-    node.Properties[property] = value
-    node.TimeRange.ValidFrom = validFrom
+    node.TimeRange.ValidFrom = deleteTime
     node.TimeRange.ValidTo = 0
     
     newData, err := json.Marshal(node)
@@ -209,7 +261,49 @@ func (ts *TemporalStore) GetEdge(id string) (*Edge, error) {
     return &edge, nil
 }
 
-func (ts *TemporalStore) SoftDeleteNode(id string, deleteTime int64) error {
+func (ts *TemporalStore) SoftDeleteEdge(id string, deleteTime int64) error {
+    currentData, err := ts.engine.Get(core.CFEdgesCurrent, []byte(id))
+    if err != nil {
+        return err
+    }
+    if currentData == nil {
+        return fmt.Errorf("edge %s not found", id)
+    }
+    
+    var edge Edge
+    if err := json.Unmarshal(currentData, &edge); err != nil {
+        return err
+    }
+    
+    edge.TimeRange.ValidTo = deleteTime - 1
+    edge.Deleted = true
+    
+    closedData, err := json.Marshal(edge)
+    if err != nil {
+        return err
+    }
+    historyKey := []byte(fmt.Sprintf("%s:%d", id, edge.TimeRange.ValidFrom))
+    if err := ts.engine.Put(core.CFEdgesHistory, historyKey, closedData); err != nil {
+        return err
+    }
+    
+    edge.TimeRange.ValidFrom = deleteTime
+    edge.TimeRange.ValidTo = 0
+    
+    newData, err := json.Marshal(edge)
+    if err != nil {
+        return err
+    }
+    
+    return ts.engine.Put(core.CFEdgesCurrent, []byte(id), newData)
+}
+
+func (ts *TemporalStore) GetStats() map[string]interface{} {
+    return ts.engine.GetStats()
+}
+
+// UpdateNodeProperty updates a node property with versioning
+func (ts *TemporalStore) UpdateNodeProperty(id string, property string, value interface{}, validFrom int64) error {
     currentData, err := ts.engine.Get(core.CFNodesCurrent, []byte(id))
     if err != nil {
         return err
@@ -223,8 +317,8 @@ func (ts *TemporalStore) SoftDeleteNode(id string, deleteTime int64) error {
         return err
     }
     
-    node.TimeRange.ValidTo = deleteTime - 1
-    node.Deleted = true
+    // Close current version
+    node.TimeRange.ValidTo = validFrom - 1
     
     closedData, err := json.Marshal(node)
     if err != nil {
@@ -235,7 +329,9 @@ func (ts *TemporalStore) SoftDeleteNode(id string, deleteTime int64) error {
         return err
     }
     
-    node.TimeRange.ValidFrom = deleteTime
+    // Create new version with updated property
+    node.Properties[property] = value
+    node.TimeRange.ValidFrom = validFrom
     node.TimeRange.ValidTo = 0
     
     newData, err := json.Marshal(node)
@@ -244,8 +340,4 @@ func (ts *TemporalStore) SoftDeleteNode(id string, deleteTime int64) error {
     }
     
     return ts.engine.Put(core.CFNodesCurrent, []byte(id), newData)
-}
-
-func (ts *TemporalStore) GetStats() map[string]interface{} {
-    return ts.engine.GetStats()
 }
