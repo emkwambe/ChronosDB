@@ -8,14 +8,15 @@ async function checkHealth() {
         if (response.ok) {
             document.getElementById('statusBadge').className = 'badge bg-success';
             document.getElementById('statusBadge').innerHTML = '<i class="bi bi-check-circle"></i> Connected';
-            document.getElementById('dbStatus').innerHTML = '● Healthy';
+            document.getElementById('dbStatus').innerHTML = '<span class="text-success">● Healthy</span>';
         } else {
             throw new Error('Health check failed');
         }
     } catch (error) {
+        console.error('Health check error:', error);
         document.getElementById('statusBadge').className = 'badge bg-danger';
         document.getElementById('statusBadge').innerHTML = '<i class="bi bi-exclamation-circle"></i> Disconnected';
-        document.getElementById('dbStatus').innerHTML = '● Offline';
+        document.getElementById('dbStatus').innerHTML = '<span class="text-danger">● Offline</span>';
     }
 }
 
@@ -46,7 +47,8 @@ async function executeQuery() {
             showError(data.error || 'Query execution failed');
         }
     } catch (error) {
-        showError('Connection error: ' + error.message);
+        console.error('Query error:', error);
+        showError('Connection error: ' + error.message + '. Make sure ChronosDB is running on port 8080');
     }
 }
 
@@ -58,7 +60,7 @@ function displayResults(data) {
         return;
     }
 
-    let html = '<table class="table table-sm table-striped">';
+    let html = '<div class="table-responsive"><table class="table table-sm table-striped">';
     html += '<thead><tr>';
     
     // Get all unique keys from results
@@ -95,7 +97,7 @@ function displayResults(data) {
         html += '</tr>';
     });
     
-    html += '</tbody></table>';
+    html += '</tbody></table></div>';
     html += `<div class="mt-2 text-muted small">${data.results.length} row(s) returned</div>`;
     resultsDiv.innerHTML = html;
 }
@@ -126,6 +128,11 @@ function showHelp() {
             <strong>FORECAST</strong> - Predict future values<br>
             <strong>AS OF</strong> - Time travel to specific timestamp<br>
             <strong>BETWEEN</strong> - Query time ranges<br>
+            <hr>
+            <strong>Examples:</strong><br>
+            <code>CREATE (n:Person {name: "Alice", age: 30})</code><br>
+            <code>MATCH (n:Person) RETURN n</code><br>
+            <code>FORECAST age OVER 30 DAYS FOR node_123</code>
         </div>
     `;
     const resultsDiv = document.getElementById('results');
@@ -134,30 +141,11 @@ function showHelp() {
         if (resultsDiv.innerHTML === helpHtml) {
             resultsDiv.innerHTML = '<p class="text-muted text-center">Help displayed</p>';
         }
-    }, 5000);
-}
-
-// Auto-refresh stats
-async function updateStats() {
-    try {
-        const response = await fetch(`${API_BASE}/query`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: 'MATCH (n) RETURN n' })
-        });
-        const data = await response.json();
-        if (data.results) {
-            document.getElementById('nodeCount').innerHTML = data.results.length;
-        }
-    } catch (error) {
-        console.error('Stats update failed:', error);
-    }
+    }, 8000);
 }
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
     checkHealth();
-    updateStats();
     setInterval(checkHealth, 30000);
-    setInterval(updateStats, 60000);
 });
