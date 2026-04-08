@@ -1,0 +1,303 @@
+package temporal
+
+import (
+    "encoding/json"
+    "fmt"
+    
+
+    "github.com/emkwambe/chronosdb/internal/storage/core"
+)
+
+type TimeRange struct {
+    ValidFrom int64 `json:"valid_from"`
+    ValidTo   int64 `json:"valid_to"`
+}
+
+type Node struct {
+    ID         string                 `json:"id"`
+    Labels     []string               `json:"labels"`
+    Properties map[string]interface{} `json:"properties"`
+    TimeRange  TimeRange              `json:"time_range"`
+    Deleted    bool                   `json:"deleted,omitempty"`
+}
+
+type Edge struct {
+    ID         string                 `json:"id"`
+    Type       string                 `json:"type"`
+    SourceID   string                 `json:"source_id"`
+    TargetID   string                 `json:"target_id"`
+    Properties map[string]interface{} `json:"properties"`
+    TimeRange  TimeRange              `json:"time_range"`
+    Deleted    bool                   `json:"deleted,omitempty"`
+}
+
+type PropertyHistory struct {
+    Property string
+    Values   []float64
+    Times    []int64
+}
+
+type TemporalStore struct {
+    engine *core.StorageEngine
+}
+
+func NewTemporalStore(dataDir string) (*TemporalStore, error) {
+    engine, err := core.NewStorageEngine(dataDir)
+    if err != nil {
+        return nil, fmt.Errorf("failed to create storage engine: %w", err)
+    }
+    return &TemporalStore{engine: engine}, nil
+}
+
+func (ts *TemporalStore) Close() error {
+    return ts.engine.Close()
+}
+
+func (ts *TemporalStore) CreateNode(id string, labels []string, props map[string]interface{}, validFrom, validTo int64) error {
+    if props == nil {
+        props = make(map[string]interface{})
+    }
+    
+    node := Node{
+        ID:         id,
+        Labels:     labels,
+        Properties: props,
+        TimeRange:  TimeRange{ValidFrom: validFrom, ValidTo: validTo},
+        Deleted:    false,
+    }
+    
+    data, err := json.Marshal(node)
+    if err != nil {
+        return fmt.Errorf("failed to marshal node: %w", err)
+    }
+    
+    key := []byte(id)
+    if err := ts.engine.Put(core.CFNodesCurrent, key, data); err != nil {
+        return err
+    }
+    
+    historyKey := []byte(fmt.Sprintf("%s:%d", id, validFrom))
+    return ts.engine.Put(core.CFNodesHistory, historyKey, data)
+}
+
+func (ts *TemporalStore) GetNode(id string) (*Node, error) {
+    currentData, err := ts.engine.Get(core.CFNodesCurrent, []byte(id))
+    if err != nil {
+        return nil, fmt.Errorf("failed to get node %s: %w", id, err)
+    }
+    if currentData == nil {
+        return nil, nil
+    }
+    
+    var node Node
+    if err := json.Unmarshal(currentData, &node); err != nil {
+        return nil, fmt.Errorf("failed to unmarshal node %s: %w", id, err)
+    }
+    
+    if node.Deleted {
+        return nil, nil
+    }
+    
+    return &node, nil
+}
+
+func (ts *TemporalStore) GetNodeAsOf(id string, timestamp int64) (*Node, error) {
+    currentData, err := ts.engine.Get(core.CFNodesCurrent, []byte(id))
+    if err != nil {
+        return nil, err
+    }
+    if currentData == nil {
+        return nil, nil
+    }
+    
+    var node Node
+    if err := json.Unmarshal(currentData, &node); err != nil {
+        return nil, err
+    }
+    
+    if node.Deleted && node.TimeRange.ValidTo <= timestamp {
+        return nil, nil
+    }
+    
+    if node.TimeRange.ValidFrom <= timestamp && (node.TimeRange.ValidTo == 0 || timestamp <= node.TimeRange.ValidTo) {
+        return &node, nil
+    }
+    
+    return nil, nil
+}
+
+// GetPropertyHistory retrieves historical values of a property for forecasting
+func (ts *TemporalStore) GetPropertyHistory(nodeID, property string, maxPoints int) (*PropertyHistory, error) {
+    // Get current node to start
+    node, err := ts.GetNode(nodeID)
+    if err != nil {
+        return nil, err
+    }
+    if node == nil {
+        return nil, fmt.Errorf("node %s not found", nodeID)
+    }
+    
+    history := &PropertyHistory{
+        Property: property,
+        Values:   []float64{},
+        Times:    []int64{},
+    }
+    
+    // Add current value if numeric
+    if val, ok := node.Properties[property]; ok {
+        if num, ok := convertToFloat64(val); ok {
+            history.Values = append(history.Values, num)
+            history.Times = append(history.Times, node.TimeRange.ValidFrom)
+        }
+    }
+    
+    // In production, would also scan history column family
+    // For MVP, return what we have
+    
+    return history, nil
+}
+
+func convertToFloat64(v interface{}) (float64, bool) {
+    switch val := v.(type) {
+    case float64:
+        return val, true
+    case float32:
+        return float64(val), true
+    case int:
+        return float64(val), true
+    case int64:
+        return float64(val), true
+    case int32:
+        return float64(val), true
+    default:
+        return 0, false
+    }
+}
+
+func (ts *TemporalStore) SoftDeleteNode(id string, deleteTime int64) error {
+    currentData, err := ts.engine.Get(core.CFNodesCurrent, []byte(id))
+    if err != nil {
+        return err
+    }
+    if currentData == nil {
+        return fmt.Errorf("node %s not found", id)
+    }
+    
+    var node Node
+    if err := json.Unmarshal(currentData, &node); err != nil {
+        return err
+    }
+    
+    node.TimeRange.ValidTo = deleteTime - 1
+    node.Deleted = true
+    
+    closedData, err := json.Marshal(node)
+    if err != nil {
+        return err
+    }
+    historyKey := []byte(fmt.Sprintf("%s:%d", id, node.TimeRange.ValidFrom))
+    if err := ts.engine.Put(core.CFNodesHistory, historyKey, closedData); err != nil {
+        return err
+    }
+    
+    node.TimeRange.ValidFrom = deleteTime
+    node.TimeRange.ValidTo = 0
+    
+    newData, err := json.Marshal(node)
+    if err != nil {
+        return err
+    }
+    
+    return ts.engine.Put(core.CFNodesCurrent, []byte(id), newData)
+}
+
+func (ts *TemporalStore) CreateEdge(id, edgeType, sourceID, targetID string, props map[string]interface{}, validFrom, validTo int64) error {
+    if props == nil {
+        props = make(map[string]interface{})
+    }
+    
+    edge := Edge{
+        ID:         id,
+        Type:       edgeType,
+        SourceID:   sourceID,
+        TargetID:   targetID,
+        Properties: props,
+        TimeRange:  TimeRange{ValidFrom: validFrom, ValidTo: validTo},
+        Deleted:    false,
+    }
+    
+    data, err := json.Marshal(edge)
+    if err != nil {
+        return fmt.Errorf("failed to marshal edge: %w", err)
+    }
+    
+    key := []byte(id)
+    if err := ts.engine.Put(core.CFEdgesCurrent, key, data); err != nil {
+        return err
+    }
+    
+    historyKey := []byte(fmt.Sprintf("%s:%d", id, validFrom))
+    return ts.engine.Put(core.CFEdgesHistory, historyKey, data)
+}
+
+func (ts *TemporalStore) GetEdge(id string) (*Edge, error) {
+    currentData, err := ts.engine.Get(core.CFEdgesCurrent, []byte(id))
+    if err != nil {
+        return nil, fmt.Errorf("failed to get edge %s: %w", id, err)
+    }
+    if currentData == nil {
+        return nil, nil
+    }
+    
+    var edge Edge
+    if err := json.Unmarshal(currentData, &edge); err != nil {
+        return nil, fmt.Errorf("failed to unmarshal edge %s: %w", id, err)
+    }
+    
+    if edge.Deleted {
+        return nil, nil
+    }
+    
+    return &edge, nil
+}
+
+func (ts *TemporalStore) SoftDeleteEdge(id string, deleteTime int64) error {
+    currentData, err := ts.engine.Get(core.CFEdgesCurrent, []byte(id))
+    if err != nil {
+        return err
+    }
+    if currentData == nil {
+        return fmt.Errorf("edge %s not found", id)
+    }
+    
+    var edge Edge
+    if err := json.Unmarshal(currentData, &edge); err != nil {
+        return err
+    }
+    
+    edge.TimeRange.ValidTo = deleteTime - 1
+    edge.Deleted = true
+    
+    closedData, err := json.Marshal(edge)
+    if err != nil {
+        return err
+    }
+    historyKey := []byte(fmt.Sprintf("%s:%d", id, edge.TimeRange.ValidFrom))
+    if err := ts.engine.Put(core.CFEdgesHistory, historyKey, closedData); err != nil {
+        return err
+    }
+    
+    edge.TimeRange.ValidFrom = deleteTime
+    edge.TimeRange.ValidTo = 0
+    
+    newData, err := json.Marshal(edge)
+    if err != nil {
+        return err
+    }
+    
+    return ts.engine.Put(core.CFEdgesCurrent, []byte(id), newData)
+}
+
+func (ts *TemporalStore) GetStats() map[string]interface{} {
+    return ts.engine.GetStats()
+}

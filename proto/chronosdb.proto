@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package chronosdb;
+
+option go_package = "github.com/emkwambe/chronosdb/proto";
+
+service ChronosDB {
+    rpc Execute(QueryRequest) returns (stream QueryResponse);
+    rpc Import(stream ImportRecord) returns (ImportSummary);
+}
+
+message QueryRequest {
+    string database = 1;
+    string query_text = 2;
+    map<string, Value> parameters = 3;
+}
+
+message QueryResponse {
+    oneof result {
+        Row row = 1;
+        Error error = 2;
+    }
+}
+
+message Row {
+    map<string, Value> fields = 1;
+}
+
+message Value {
+    oneof kind {
+        string string_value = 1;
+        double number_value = 2;
+        bool bool_value = 3;
+        string timestamp_value = 4;
+    }
+}
+
+message Error {
+    string code = 1;
+    string message = 2;
+}
+
+message ImportRecord {
+    string type = 1;
+    map<string, Value> properties = 2;
+    string valid_from = 3;
+    string valid_to = 4;
+}
+
+message ImportSummary {
+    int64 nodes_created = 1;
+    int64 edges_created = 2;
+    int64 errors = 3;
+}
