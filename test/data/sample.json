@@ -1,0 +1,23 @@
+[
+  {
+    "name": "Alice",
+    "age": 30,
+    "city": "New York",
+    "amount": 100.50,
+    "timestamp": 1705296000
+  },
+  {
+    "name": "Bob",
+    "age": 25,
+    "city": "Los Angeles",
+    "amount": 250.00,
+    "timestamp": 1705382400
+  },
+  {
+    "name": "Charlie",
+    "age": 35,
+    "city": "Chicago",
+    "amount": 75.25,
+    "timestamp": 1705468800
+  }
+]

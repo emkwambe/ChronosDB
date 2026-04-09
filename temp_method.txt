@@ -1,0 +1,36 @@
+// GetPropertyHistory retrieves historical values of a property for forecasting
+func (ts *TemporalStore) GetPropertyHistory(nodeID string, property string, maxPoints int) (*PropertyHistory, error) {
+    // Get current node
+    node, err := ts.GetNode(nodeID)
+    if err != nil {
+        return nil, err
+    }
+    if node == nil {
+        return nil, fmt.Errorf("node %s not found", nodeID)
+    }
+    
+    history := &PropertyHistory{
+        Property: property,
+        Values:   []float64{},
+        Times:    []int64{},
+    }
+    
+    // Add current value if numeric
+    if val, ok := node.Properties[property]; ok {
+        if num, ok := convertToFloat64(val); ok {
+            history.Values = append(history.Values, num)
+            history.Times = append(history.Times, node.TimeRange.ValidFrom)
+        }
+    }
+    
+    // In production, would also scan history column family
+    // For MVP, return what we have
+    return history, nil
+}
+
+// PropertyHistory holds historical data for forecasting
+type PropertyHistory struct {
+    Property string
+    Values   []float64
+    Times    []int64
+}
