@@ -3,10 +3,13 @@ package rest
 import (
     "encoding/json"
     "fmt"
+    "io"
     "log"
     "net/http"
+    "os"
 
     "github.com/gorilla/mux"
+    "github.com/emkwambe/chronosdb/internal/importer"
     "github.com/emkwambe/chronosdb/internal/query/executor"
     "github.com/emkwambe/chronosdb/internal/storage/temporal"
     "github.com/emkwambe/chronosdb/pkg/chronosql"
@@ -17,6 +20,7 @@ type Server struct {
     executor *executor.Executor
     apiKey   string
     port     string
+    store    *temporal.TemporalStore
 }
 
 type QueryRequest struct {
@@ -37,6 +41,7 @@ func NewServer(store *temporal.TemporalStore, apiKey, port string) *Server {
         executor: exec,
         apiKey:   apiKey,
         port:     port,
+        store:    store,
     }
     
     s.routes()
@@ -50,6 +55,7 @@ func (s *Server) routes() {
     api.HandleFunc("/query", s.handleQuery).Methods("POST")
     api.HandleFunc("/health", s.handleHealth).Methods("GET")
     api.HandleFunc("/debug", s.handleDebug).Methods("POST")
+    api.HandleFunc("/import", s.handleImportUpload).Methods("POST")
 }
 
 func (s *Server) authMiddleware(next http.Handler) http.Handler {
@@ -129,6 +135,74 @@ func (s *Server) handleDebug(w http.ResponseWriter, r *http.Request) {
     })
 }
 
+func (s *Server) handleImportUpload(w http.ResponseWriter, r *http.Request) {
+    if err := r.ParseMultipartForm(32 << 20); err != nil {
+        respondError(w, "Failed to parse form: "+err.Error(), http.StatusBadRequest)
+        return
+    }
+    
+    file, _, err := r.FormFile("file")
+    if err != nil {
+        respondError(w, "No file uploaded", http.StatusBadRequest)
+        return
+    }
+    defer file.Close()
+    
+    label := r.FormValue("label")
+    format := r.FormValue("format")
+    
+    if label == "" {
+        respondError(w, "Label is required", http.StatusBadRequest)
+        return
+    }
+    
+    content, err := io.ReadAll(file)
+    if err != nil {
+        respondError(w, "Failed to read file: "+err.Error(), http.StatusInternalServerError)
+        return
+    }
+    
+    dataImporter := importer.NewDataImporter(s.store, s.executor)
+    var stats *importer.ImportStats
+    
+    switch format {
+    case "csv":
+        tempFile, _ := os.CreateTemp("", "upload-*.csv")
+        defer os.Remove(tempFile.Name())
+        tempFile.Write(content)
+        tempFile.Close()
+        stats, err = dataImporter.ImportCSV(tempFile.Name(), label, "")
+    case "json":
+        tempFile, _ := os.CreateTemp("", "upload-*.json")
+        defer os.Remove(tempFile.Name())
+        tempFile.Write(content)
+        tempFile.Close()
+        stats, err = dataImporter.ImportJSON(tempFile.Name(), label)
+    default:
+        respondError(w, "Unsupported format: "+format, http.StatusBadRequest)
+        return
+    }
+    
+    if err != nil {
+        respondError(w, "Import failed: "+err.Error(), http.StatusInternalServerError)
+        return
+    }
+    
+    respondJSON(w, stats, http.StatusOK)
+}
+
 func (s *Server) Start() error {
     return http.ListenAndServe(":"+s.port, s.router)
+}
+
+func respondJSON(w http.ResponseWriter, data interface{}, status int) {
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(status)
+    json.NewEncoder(w).Encode(data)
+}
+
+func respondError(w http.ResponseWriter, message string, status int) {
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(status)
+    json.NewEncoder(w).Encode(map[string]string{"error": message})
 }
