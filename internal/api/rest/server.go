@@ -47,7 +47,7 @@ func (s *Server) routes() {
     api := s.router.PathPrefix("/v1/db/{db}").Subrouter()
     api.Use(s.authMiddleware)
     
-    api.HandleFunc("/query", s.handleQuery).Methods("POST")`n    api.HandleFunc("/import", s.handleImport).Methods("POST")
+    api.HandleFunc("/query", s.handleQuery).Methods("POST")
     api.HandleFunc("/health", s.handleHealth).Methods("GET")
     api.HandleFunc("/debug", s.handleDebug).Methods("POST")
 }
@@ -132,4 +132,3 @@ func (s *Server) handleDebug(w http.ResponseWriter, r *http.Request) {
 func (s *Server) Start() error {
     return http.ListenAndServe(":"+s.port, s.router)
 }
-

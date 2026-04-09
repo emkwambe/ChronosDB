@@ -30,6 +30,12 @@ type Edge struct {
     Deleted    bool                   `json:"deleted,omitempty"`
 }
 
+type PropertyHistory struct {
+    Property string
+    Values   []float64
+    Times    []int64
+}
+
 type TemporalStore struct {
     engine *core.StorageEngine
 }
@@ -119,7 +125,6 @@ func (ts *TemporalStore) GetNodeAsOf(id string, timestamp int64) (*Node, error) 
     return nil, nil
 }
 
-// UpdateNodeProperty updates a property with versioning
 func (ts *TemporalStore) UpdateNodeProperty(id string, property string, value interface{}, validFrom int64) error {
     currentData, err := ts.engine.Get(core.CFNodesCurrent, []byte(id))
     if err != nil {
@@ -134,7 +139,6 @@ func (ts *TemporalStore) UpdateNodeProperty(id string, property string, value in
         return err
     }
     
-    // Close current version
     node.TimeRange.ValidTo = validFrom - 1
     
     closedData, err := json.Marshal(node)
@@ -146,7 +150,6 @@ func (ts *TemporalStore) UpdateNodeProperty(id string, property string, value in
         return err
     }
     
-    // Create new version
     node.Properties[property] = value
     node.TimeRange.ValidFrom = validFrom
     node.TimeRange.ValidTo = 0
@@ -248,4 +251,46 @@ func (ts *TemporalStore) SoftDeleteNode(id string, deleteTime int64) error {
 
 func (ts *TemporalStore) GetStats() map[string]interface{} {
     return ts.engine.GetStats()
+}
+
+func (ts *TemporalStore) GetPropertyHistory(nodeID string, property string, maxPoints int) (*PropertyHistory, error) {
+    node, err := ts.GetNode(nodeID)
+    if err != nil {
+        return nil, err
+    }
+    if node == nil {
+        return nil, fmt.Errorf("node %s not found", nodeID)
+    }
+    
+    history := &PropertyHistory{
+        Property: property,
+        Values:   []float64{},
+        Times:    []int64{},
+    }
+    
+    if val, ok := node.Properties[property]; ok {
+        if num, ok := convertToFloat64(val); ok {
+            history.Values = append(history.Values, num)
+            history.Times = append(history.Times, node.TimeRange.ValidFrom)
+        }
+    }
+    
+    return history, nil
+}
+
+func convertToFloat64(v interface{}) (float64, bool) {
+    switch val := v.(type) {
+    case float64:
+        return val, true
+    case float32:
+        return float64(val), true
+    case int:
+        return float64(val), true
+    case int64:
+        return float64(val), true
+    case int32:
+        return float64(val), true
+    default:
+        return 0, false
+    }
 }
