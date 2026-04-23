@@ -1,35 +1,72 @@
-# Makefile for ChronosDB import commands
+# ChronosDB Makefile
+# Single-node bitemporal graph database with learned shortcuts.
 
-.PHONY: build-importer import-csv import-json import-sql import-all query-csv query-json query-sql
+.PHONY: build test test-race lint vet bench clean \
+        build-chronosd build-importer build-webserver \
+        import-csv import-json import-sql import-all \
+        query-sample docker-build docker-up docker-down
+
+# ---- Build ----
+
+build: build-chronosd build-importer build-webserver
+
+build-chronosd:
+	go build -o bin/chronosd ./cmd/chronosd
 
 build-importer:
-    go build -o bin/importer ./cmd/importer
+	go build -o bin/importer ./cmd/importer
+
+build-webserver:
+	go build -o bin/webserver ./cmd/webserver
+
+# ---- Quality gates (guardrail: all must pass before merge) ----
+
+test:
+	go test ./...
+
+test-race:
+	go test -race ./...
+
+vet:
+	go vet ./...
+
+lint:
+	@command -v staticcheck >/dev/null || { echo "staticcheck not installed: run 'go install honnef.co/go/tools/cmd/staticcheck@latest'"; exit 1; }
+	staticcheck ./...
+
+bench:
+	go test -bench=. -benchmem -run=^$$ ./... | tee bench-results.txt
+
+# ---- Data ingestion (sample fixtures) ----
 
 import-csv: build-importer
-    ./bin/importer -file test/data/sample.csv -format csv -label Customer -timestamp timestamp
+	./bin/importer -file test/data/sample.csv -format csv -label Customer -timestamp timestamp
 
 import-json: build-importer
-    ./bin/importer -file test/data/sample.json -format json -label Person
+	./bin/importer -file test/data/sample.json -format json -label Person
 
 import-sql: build-importer
-    ./bin/importer -file test/data/sample.sql -format sql -label User
-
-import-large: build-importer
-    ./bin/importer -file test/data/large_sample.csv -format csv -label Customer -timestamp timestamp
+	./bin/importer -file test/data/sample.sql -format sql -label User
 
 import-all: import-csv import-json import-sql
 
-query-csv:
-    @curl -X POST http://localhost:8080/v1/db/test/query \
-      -H "Content-Type: application/json" \
-      -d '{"query": "MATCH (n:Customer) RETURN n"}'
+query-sample:
+	@curl -X POST http://localhost:8080/v1/db/test/query \
+	  -H "Content-Type: application/json" \
+	  -d '{"query": "MATCH (n:Customer) RETURN n"}'
 
-query-stats:
-    @curl -X POST http://localhost:8080/v1/db/test/query \
-      -H "Content-Type: application/json" \
-      -d '{"query": "MATCH (n:Customer) RETURN count(n) as total, avg(n.age) as avg_age, sum(n.amount) as total_amount"}'
+# ---- Docker ----
 
-query-forecast:
-    @curl -X POST http://localhost:8080/v1/db/test/query \
-      -H "Content-Type: application/json" \
-      -d '{"query": "FORECAST amount OVER 30 DAYS FOR Customer_1"}'
+docker-build:
+	docker build -t chronosdb:dev .
+
+docker-up:
+	docker-compose up -d
+
+docker-down:
+	docker-compose down
+
+# ---- Cleanup ----
+
+clean:
+	rm -rf bin/ data/ bench-results.txt

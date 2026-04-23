@@ -1,82 +1,102 @@
-# ChronosDB - Roadmap for v6.0.0 and Beyond
+# ChronosDB Roadmap
 
-## ✅ Completed (v5.0.0)
-- [x] Core temporal graph storage
-- [x] Time-travel queries (AS OF, BETWEEN)
-- [x] 4 ML forecasting models
-- [x] CSV/JSON/SQL import
-- [x] REST + gRPC APIs
-- [x] Web UI dashboard
-- [x] Multi-tenancy support
-- [x] Docker deployment
+**Current version:** `0.1.0-dev`
+**Target for v1.0:** ~28 weeks, 4 phases, 11 sprints.
 
-## 🚀 Next Steps - Phase 6 (v6.0.0)
+This roadmap supersedes all prior "v5.0 COMPLETE" claims. The codebase is at
+Phase 1 level functionally; Phase 0 (repo hygiene) is in progress. Nothing
+rolls forward until its phase's exit criteria are all green.
 
-### 1. Performance Optimization
-- [ ] Implement indexing for faster queries
-- [ ] Add query caching layer
-- [ ] Optimize temporal range queries
-- [ ] Batch write operations
+For the full phase/sprint breakdown see [`docs/blueprint.md`](./docs/blueprint.md)
+and [`docs/sprints.md`](./docs/sprints.md).
 
-### 2. Advanced Analytics
-- [ ] Add more ML models (LSTM, Prophet, XGBoost)
-- [ ] Time-series anomaly detection
-- [ ] Graph algorithms (PageRank, Community Detection)
-- [ ] Real-time alerting based on forecasts
+---
 
-### 3. Enterprise Features
-- [ ] LDAP/SSO integration
-- [ ] Audit trail with tamper-proof logs
-- [ ] Data encryption at rest
-- [ ] Backup and restore automation
-- [ ] Multi-region replication
+## Phase 0 — Repo hygiene & foundation (2 weeks)
 
-### 4. Ecosystem Integration
-- [ ] Kafka connector (bidirectional)
-- [ ] PostgreSQL foreign data wrapper
-- [ ] Spark connector for analytics
-- [ ] Airflow integration for pipelines
+Strip overclaims, lock in CI, define the reference workload.
 
-### 5. Developer Experience
-- [ ] OpenAPI/Swagger documentation
-- [ ] Terraform provider
-- [ ] Helm chart for Kubernetes
-- [ ] VS Code extension
+**Exit criteria**
 
-### 6. Cloud Native
-- [ ] Kubernetes operator
-- [ ] AWS RDS-like managed service
-- [ ] Auto-scaling based on load
-- [ ] Serverless deployment option
+- [x] Delete `predictive/`, `multitenancy/`, `streaming/`, `tenantctl`,
+      `kafka_producer`, duplicate PDFs, `temp_method.txt`
+- [x] README rewritten; version set to `0.1.0-dev`
+- [ ] CI pipeline: `go vet` + `staticcheck` + `go test -race` + benchmark
+      baseline captured as JSON artifact
+- [ ] Reference dataset generator (synthetic bitemporal graph, 10M edges,
+      deterministic seed) committed
+- [ ] `make bench` produces reproducible baseline JSON
 
-## 📊 Success Metrics for v6.0.0
+## Phase 1 — Bitemporal core (6 weeks)
 
-| Metric | Target |
-|--------|--------|
-| Query latency (P99) | <50ms |
-| Write throughput | 100k ops/sec |
-| Forecast accuracy | >90% |
-| Availability | 99.99% |
-| Storage efficiency | 10x compression |
+Single-node TKG with provable bitemporal semantics.
 
-## 🎯 Immediate Next Actions
+**Exit criteria**
 
-1. **Week 1**: Implement query indexing
-2. **Week 2**: Add caching layer
-3. **Week 3**: Deploy to Kubernetes
-4. **Week 4**: Launch v6.0.0 beta
+- 100% of bitemporal correctness test suite passes
+- `AS OF` point-lookup p99 < 10ms on reference dataset
+- Single-hop temporal traversal p99 < 50ms
+- Write throughput ≥ 50k updates/sec/node on SSD
+- Storage overhead ≤ 2.5× current-state equivalent
+- Compaction is crash-safe (kill-during-compaction test passes)
 
-## 🤝 Contributing
+## Phase 2 — Predictive Graph Index (6 weeks)
 
-We welcome contributions! Areas needing help:
-- Documentation improvements
-- Performance testing
-- Additional ML models
-- Client libraries (Rust, C#, Ruby)
-- Integration examples
+Workload monitor, cost-benefit shortcut manager, planner integration, eviction.
 
-## 📞 Contact
+**Exit criteria**
 
-- GitHub: https://github.com/emkwambe/ChronosDB
-- Issues: https://github.com/emkwambe/ChronosDB/issues
-- Email: team@chronosdb.io
+- Workload monitor captures normalized signatures with <1% CPU overhead
+- Pattern → shortcut → planner → latency-drop pipeline end-to-end
+- `EXPLAIN` shows shortcut usage and estimated benefit
+- Warm p99 ≥ 5× better than cold p99 after 1000 queries on YCSB-temporal
+- Shortcut storage capped at 20% of base graph; TTL eviction works
+- Write path latency regression from PGI ≤ 5%
+
+## Phase 3 — Operability & ingestion (4 weeks)
+
+Make it usable by someone who isn't the author.
+
+**Exit criteria**
+
+- Bulk importer sustains 500 MB/s on reference hardware
+- Simple single-node Kafka consumer (idempotent upserts, lag metrics)
+- Full Prometheus metric coverage
+- Snapshot backup + WAL restore verified by chaos test
+- Docker demo + three tutorials (compliance audit, SCD analytics,
+  permission archaeology)
+- REST + gRPC APIs fully documented (OpenAPI + proto comments)
+
+## Phase 4 — Benchmarks, hardening, v1.0 (4 weeks)
+
+Prove the worth publicly; tag `v1.0.0`.
+
+**Exit criteria**
+
+- Four benchmarks published with reproducible harness:
+  1. ≥10× faster AS OF traversal vs Neo4j (temporal workaround) on 100M-edge graph
+  2. PGI warm p99 ≥ 5× better than cold p99 on YCSB-temporal
+  3. Storage overhead ≤ 2.5× confirmed on real workload trace
+  4. Positive shortcut ROI on captured investigation workload
+- 72-hour soak test passes (no leak, no compaction stall, no cache bloat)
+- TLS 1.3, token auth, audit log, OWASP review clean
+- `v1.0.0` tagged with release notes, migration guide, blog post
+
+---
+
+## Permanently out of scope (v1.0)
+
+These were in prior docs but do not serve the single-node,
+bitemporal-graph-with-learned-shortcuts thesis. They will not ship in v1.0
+and may never ship:
+
+- Distributed mode / sharding / coordinator / etcd
+- Predictive Analytics Layer (PAL) / forecasting / ML model registry
+- Multi-tenancy and LDAP/SSO
+- SQL access layer (Calcite)
+- Federated queries across clusters
+- Graph Neural Network shortcut prediction
+- Kafka Connect plugin (the simple consumer above is sufficient)
+
+Bringing any of these back requires a new PRD amendment and explicit
+re-scoping, not quiet feature creep.
