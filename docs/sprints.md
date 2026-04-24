@@ -27,14 +27,25 @@ what the README says it does.
 
 ## Phase 1 — Sprint 1.1: "Storage correctness"
 
-| ID      | Story                                                                                                                 |
-| ------- | --------------------------------------------------------------------------------------------------------------------- |
-| S1.1.1  | Lock down key encoding (`{partition}:node:{id}:{valid_from}:{txn_id}`); document invariants in `internal/storage/core`. |
-| S1.1.2  | MVCC snapshot isolation: transaction manager, read timestamps, write conflict detection, regression tests.           |
-| S1.1.3  | Group-commit WAL; configurable fsync policy; crash-recovery test kills process mid-commit.                           |
-| S1.1.4  | Bitemporal correctness suite: 50+ tests covering valid-time overlaps, txn-time monotonicity, point-in-time replay.   |
+| ID      | Story                                                                                                                 | Status |
+| ------- | --------------------------------------------------------------------------------------------------------------------- | ------ |
+| S1.1.1  | Lock down key encoding (`{cf}:{id}:{valid_from_be}:{txn_id_be}`); document invariants in `internal/storage/core`. | ✓ done |
+| S1.1.2  | MVCC snapshot isolation: transaction manager, read timestamps, write conflict detection, regression tests.           | next   |
+| S1.1.3  | Group-commit WAL; configurable fsync policy; crash-recovery test kills process mid-commit.                           |        |
+| S1.1.4  | Bitemporal correctness suite: 50+ tests covering valid-time overlaps, txn-time monotonicity, point-in-time replay.   | skeleton landed in S1.1.1; expansion tracked alongside each subsequent story |
 
 **Sprint exit:** MVCC + WAL pass all new tests under `-race`.
+
+**S1.1.1 notes:**
+- Key encoding lives in `internal/storage/core/keys.go` with a companion
+  `INVARIANTS.md` spelling out I1–I10 and which sprint closes each gap.
+- Bitemporal correctness suite skeleton at
+  `internal/storage/temporal/bitemporal_test.go`. Tests map 1:1 to the
+  invariants; skipped tests cite the sprint that will un-skip them.
+- History keys use fixed-width big-endian int64 for `valid_from` and
+  `txn_id` so prefix iteration == bitemporal order (Invariant I7).
+- Invariant I4 (half-open valid-time) is documented but not yet enforced
+  — `GetNodeAsOf` uses an inclusive upper bound today; that's S1.2 work.
 
 ## Phase 1 — Sprint 1.2: "Temporal query execution"
 
