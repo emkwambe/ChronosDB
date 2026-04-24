@@ -37,19 +37,37 @@ type PropertyHistory struct {
 }
 
 type TemporalStore struct {
-    engine *core.StorageEngine
+	engine *core.StorageEngine
+	txnMgr *txnManager
 }
 
 func NewTemporalStore(dataDir string) (*TemporalStore, error) {
-    engine, err := core.NewStorageEngine(dataDir)
-    if err != nil {
-        return nil, fmt.Errorf("failed to create storage engine: %w", err)
-    }
-    return &TemporalStore{engine: engine}, nil
+	engine, err := core.NewStorageEngine(dataDir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create storage engine: %w", err)
+	}
+	txnMgr, err := newTxnManager(engine)
+	if err != nil {
+		_ = engine.Close()
+		return nil, fmt.Errorf("failed to initialize txn manager: %w", err)
+	}
+	return &TemporalStore{engine: engine, txnMgr: txnMgr}, nil
+}
+
+// BeginTx starts a new transaction. The returned *Txn holds a
+// monotonically-allocated ID (Invariant I5). Callers must Commit or
+// Rollback to release the transaction.
+//
+// Step 1 scope: the transaction exposes only ID and lifecycle control.
+// Transactional write methods arrive in a later commit; for now,
+// callers needing writes should continue to use the non-transactional
+// TemporalStore methods.
+func (ts *TemporalStore) BeginTx() (*Txn, error) {
+	return ts.txnMgr.begin()
 }
 
 func (ts *TemporalStore) Close() error {
-    return ts.engine.Close()
+	return ts.engine.Close()
 }
 
 func (ts *TemporalStore) CreateNode(id string, labels []string, props map[string]interface{}, validFrom, validTo int64) error {

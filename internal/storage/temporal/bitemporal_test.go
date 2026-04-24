@@ -101,8 +101,26 @@ func TestI4d_AsOfBeforeValidFromReturnsNil(t *testing.T) {
 
 // ---- I5 — Transaction-time monotonicity ----
 
+// I5: BeginTx hands out strictly-increasing IDs. This guard runs at the
+// invariant-suite level; txn_test.go exercises the same property with
+// restart + concurrency cases.
 func TestI5_TxnIDStrictlyIncreasing(t *testing.T) {
-	t.Skip("S1.1.2: transaction manager and txn_id allocation not yet implemented.")
+	s := newTestStore(t)
+
+	var prev int64
+	for i := 0; i < 5; i++ {
+		tx, err := s.BeginTx()
+		if err != nil {
+			t.Fatalf("begin: %v", err)
+		}
+		if tx.ID() <= prev {
+			t.Fatalf("txn id not strictly increasing: prev=%d got=%d", prev, tx.ID())
+		}
+		prev = tx.ID()
+		if err := tx.Commit(); err != nil {
+			t.Fatalf("commit: %v", err)
+		}
+	}
 }
 
 // ---- I6 — At most one live version per entity per instant ----

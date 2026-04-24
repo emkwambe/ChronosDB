@@ -66,9 +66,11 @@ For a given logical entity (node ID or edge ID), successive writes
 receive strictly increasing `txn_id` values. Transaction IDs are
 globally monotonic; no two concurrent transactions share a txn_id.
 
-**Current code:** `temporal.go` does not track txn IDs. Transaction
-management lands in Sprint 1.2. Until then, txn_id is supplied by the
-caller and the tests use explicit values.
+**Current code:** `temporal.txnManager` allocates monotonic txn IDs,
+persists the counter to `mt:next_txn_id`, and exposes `BeginTx`/`Commit`
+/`Rollback` on `TemporalStore` (Sprint 1.1.2 step 1). Write staging and
+conflict detection follow in the next step. Non-transactional writes
+still use caller-supplied (or zero) txn IDs pending migration.
 
 ## I6 — Version overlap at most one per entity per point
 
@@ -147,7 +149,7 @@ and re-asserted in the Phase 5 candidate design.
 | I2        | ID character restrictions                          | Enforced at encode              | S1.1.1 ✓    |
 | I3        | Timestamp encoding (microseconds, BE int64)        | Enforced at encode              | S1.1.1 ✓    |
 | I4        | Half-open valid-time                               | Broken in GetNodeAsOf           | S1.2        |
-| I5        | Monotonic txn IDs                                  | Not tracked                     | S1.1.2      |
+| I5        | Monotonic txn IDs                                  | Allocated + persisted           | S1.1.2 step 1 ✓ |
 | I6        | At most one live version per entity per instant   | Not enforced                    | S1.1.2      |
 | I7        | Lexicographic key ordering = bitemporal order      | Enforced at encode              | S1.1.1 ✓    |
 | I8        | AS OF reproducibility                              | Partial                         | S1.2        |
