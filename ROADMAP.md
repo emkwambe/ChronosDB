@@ -21,11 +21,15 @@ Strip overclaims, lock in CI, define the reference workload.
 - [x] Delete `predictive/`, `multitenancy/`, `streaming/`, `tenantctl`,
       `kafka_producer`, duplicate PDFs, `temp_method.txt`
 - [x] README rewritten; version set to `0.1.0-dev`
-- [ ] CI pipeline: `go vet` + `staticcheck` + `go test -race` + benchmark
-      baseline captured as JSON artifact
-- [ ] Reference dataset generator (synthetic bitemporal graph, 10M edges,
-      deterministic seed) committed
-- [ ] `make bench` produces reproducible baseline JSON
+- [x] CI pipeline (`.github/workflows/ci.yml`): `go vet` + `go mod tidy`
+      drift check + `staticcheck` + `go test -race` + benchmark baseline
+      captured as a GitHub Actions artifact
+- [x] Reference dataset generator committed at `test/synthetic/`
+      (package `synthetic`): deterministic, bitemporal, scale profiles
+      Small / Medium / Large (Large = 10M edges). Determinism + ground-truth
+      consistency tests pass.
+- [x] `make bench` produces reproducible baseline JSON
+      (`bench-results.json`) via `scripts/bench.sh`.
 
 ## Phase 1 — Bitemporal core (6 weeks)
 

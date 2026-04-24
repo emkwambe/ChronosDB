@@ -35,7 +35,7 @@ lint:
 	staticcheck ./...
 
 bench:
-	go test -bench=. -benchmem -run=^$$ ./... | tee bench-results.txt
+	./scripts/bench.sh
 
 # ---- Data ingestion (sample fixtures) ----
 
@@ -69,4 +69,4 @@ docker-down:
 # ---- Cleanup ----
 
 clean:
-	rm -rf bin/ data/ bench-results.txt
+	rm -rf bin/ data/ bench-results.json

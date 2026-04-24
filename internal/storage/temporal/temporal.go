@@ -212,6 +212,31 @@ func (ts *TemporalStore) GetEdge(id string) (*Edge, error) {
     return &edge, nil
 }
 
+func (ts *TemporalStore) GetEdgeAsOf(id string, timestamp int64) (*Edge, error) {
+	currentData, err := ts.engine.Get(core.CFEdgesCurrent, []byte(id))
+	if err != nil {
+		return nil, err
+	}
+	if currentData == nil {
+		return nil, nil
+	}
+
+	var edge Edge
+	if err := json.Unmarshal(currentData, &edge); err != nil {
+		return nil, err
+	}
+
+	if edge.Deleted && edge.TimeRange.ValidTo <= timestamp {
+		return nil, nil
+	}
+
+	if edge.TimeRange.ValidFrom <= timestamp && (edge.TimeRange.ValidTo == 0 || timestamp <= edge.TimeRange.ValidTo) {
+		return &edge, nil
+	}
+
+	return nil, nil
+}
+
 func (ts *TemporalStore) SoftDeleteNode(id string, deleteTime int64) error {
     currentData, err := ts.engine.Get(core.CFNodesCurrent, []byte(id))
     if err != nil {
