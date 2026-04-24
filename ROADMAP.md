@@ -88,6 +88,23 @@ Prove the worth publicly; tag `v1.0.0`.
 
 ---
 
+## Candidate post-v1.0 extensions
+
+Designed but **not committed**. Lives as a sketch so the v1.0
+architecture does not foreclose them; explicitly excluded from v1.0
+exit criteria.
+
+- **Phase 5 (candidate): Temporal Value Analytics (TVA).** Built-in
+  `decay()` / `age()` functions in ChronosQL, per-edge-type learned
+  decay rates, scenario-rerun overrides. Inspired by time-value-of-
+  money analytics. See
+  [`docs/phase5-temporal-value.md`](./docs/phase5-temporal-value.md)
+  and [`docs/chronosql-decay.md`](./docs/chronosql-decay.md).
+  Promotion to committed requires Phase 4 green + PRD amendment +
+  two confirmed pilot users.
+
+---
+
 ## Permanently out of scope (v1.0)
 
 These were in prior docs but do not serve the single-node,

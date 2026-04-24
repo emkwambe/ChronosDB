@@ -78,6 +78,10 @@ make bench
 - [`docs/TRD.md`](./docs/TRD.md) — technical requirements (rescoped)
 - [`docs/blueprint.md`](./docs/blueprint.md) — 4-phase development blueprint
 - [`docs/sprints.md`](./docs/sprints.md) — sprint-by-sprint story breakdown
+- [`docs/phase5-temporal-value.md`](./docs/phase5-temporal-value.md) —
+  candidate post-v1.0 extension (Temporal Value Analytics)
+- [`docs/chronosql-decay.md`](./docs/chronosql-decay.md) —
+  companion function design for TVA (`decay()` / `age()`)
 
 ## License
 
