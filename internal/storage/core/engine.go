@@ -80,6 +80,35 @@ func (s *StorageEngine) WriteBatch(updates map[string]map[string][]byte) error {
     })
 }
 
+// BatchOp is one (column-family, key, value) tuple inside an atomic
+// batch. Unlike WriteBatch's nested map, the key is a byte slice — so
+// callers can use keys produced by core/keys.go that contain raw
+// big-endian int64 components. WriteBatch silently corrupts those.
+type BatchOp struct {
+	CF    string
+	Key   []byte
+	Value []byte
+}
+
+// ApplyBatch applies the given operations atomically. Used by the
+// transaction manager at commit time.
+func (s *StorageEngine) ApplyBatch(ops []BatchOp) error {
+	if len(ops) == 0 {
+		return nil
+	}
+	return s.db.Update(func(txn *badger.Txn) error {
+		for _, op := range ops {
+			fullKey := make([]byte, 0, len(op.CF)+len(op.Key))
+			fullKey = append(fullKey, op.CF...)
+			fullKey = append(fullKey, op.Key...)
+			if err := txn.Set(fullKey, op.Value); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 // Close closes the database
 func (s *StorageEngine) Close() error {
     return s.db.Close()

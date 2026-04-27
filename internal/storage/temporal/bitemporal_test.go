@@ -125,9 +125,48 @@ func TestI5_TxnIDStrictlyIncreasing(t *testing.T) {
 
 // ---- I6 — At most one live version per entity per instant ----
 
+// I6 is enforced by first-committer-wins SI conflict detection: two
+// concurrent transactions cannot both successfully write a new version
+// for the same node ID. The losing committer aborts and its writes are
+// discarded, so storage never holds two live versions at the same
+// valid-time point. (See txn_test.go for finer-grained tests of the
+// conflict path.)
 func TestI6_NoOverlappingVersions(t *testing.T) {
-	t.Skip("S1.1.2: writes currently overwrite rather than close-then-open; " +
-		"version-overlap enforcement requires the transaction manager.")
+	s := newTestStore(t)
+
+	seed, _ := s.BeginTx()
+	if err := seed.CreateNode("n1", nil, map[string]any{"v": 0}, 100, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := seed.Commit(); err != nil {
+		t.Fatal(err)
+	}
+
+	tx1, _ := s.BeginTx()
+	tx2, _ := s.BeginTx()
+
+	if err := tx1.UpdateNodeProperty("n1", "v", 1, 200); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx2.UpdateNodeProperty("n1", "v", 2, 300); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := tx1.Commit(); err != nil {
+		t.Fatalf("tx1 commit: %v", err)
+	}
+	if err := tx2.Commit(); err != ErrWriteConflict {
+		t.Fatalf("expected ErrWriteConflict on tx2, got %v", err)
+	}
+
+	got, err := s.GetNode("n1")
+	if err != nil {
+		t.Fatalf("read after conflict: %v", err)
+	}
+	// Only tx1's value should be visible.
+	if got == nil || got.Properties["v"] != float64(1) {
+		t.Fatalf("expected v=1 (tx1's), got %v", got)
+	}
 }
 
 // ---- I8 — AS OF reproducibility ----

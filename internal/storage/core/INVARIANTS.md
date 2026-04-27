@@ -79,9 +79,16 @@ any instant in valid-time. Writes must close out the prior version
 (setting `valid_to = new_version.valid_from`) before opening a new
 one.
 
-This is the bitemporal correctness property most likely to regress on
-concurrent writes. Enforcement is the transaction manager's job
-(Sprint 1.2).
+**Current code:** `Txn.UpdateNodeProperty` writes both rows
+(closing + opening) atomically at commit time, so single-writer
+correctness holds. Multiple concurrent writers are reconciled by
+first-committer-wins SI in `Txn.Commit`: the losing committer
+receives `ErrWriteConflict` and its staged writes are discarded.
+
+The implementation does *not yet* prevent a single transaction from
+writing internally-inconsistent versions of the same entity (e.g.
+`UpdateNodeProperty` twice on the same node within one Txn produces a
+malformed history). That guard rail follows in Sprint 1.2.
 
 ## I7 — Key ordering
 
@@ -150,7 +157,7 @@ and re-asserted in the Phase 5 candidate design.
 | I3        | Timestamp encoding (microseconds, BE int64)        | Enforced at encode              | S1.1.1 ✓    |
 | I4        | Half-open valid-time                               | Broken in GetNodeAsOf           | S1.2        |
 | I5        | Monotonic txn IDs                                  | Allocated + persisted           | S1.1.2 step 1 ✓ |
-| I6        | At most one live version per entity per instant   | Not enforced                    | S1.1.2      |
+| I6        | At most one live version per entity per instant   | First-committer-wins SI         | S1.1.2 step 2 ✓ |
 | I7        | Lexicographic key ordering = bitemporal order      | Enforced at encode              | S1.1.1 ✓    |
 | I8        | AS OF reproducibility                              | Partial                         | S1.2        |
 | I9        | Soft delete preserves history                      | Partial                         | S1.2        |
